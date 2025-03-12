@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useKeycloak } from '@react-keycloak/web';
+import { checkAccess, downloadFile } from '../utils/utils';
 
 const ReportPage: React.FC = () => {
   const { keycloak, initialized } = useKeycloak();
@@ -7,7 +8,7 @@ const ReportPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const downloadReport = async () => {
-    if (!keycloak?.token) {
+    if (!checkAccess(keycloak)) {
       setError('Not authenticated');
       return;
     }
@@ -16,13 +17,21 @@ const ReportPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/reports`, {
+      const response = await fetch(`${process.env.REACT_APP_REPORTS_API_URL}/reports`, {
         headers: {
-          'Authorization': `Bearer ${keycloak.token}`
+          'Authorization': `Bearer ${keycloak.token}`,
+          'Content-Type': 'application/json'
         }
       });
 
-      
+      if (response.status === 200) {
+        const report = await response.json();
+        downloadFile(report, "report");
+        console.debug("Report: ", report);
+      } else {
+        setError(response.statusText);
+        console.debug("Report: ", response);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -32,6 +41,19 @@ const ReportPage: React.FC = () => {
 
   if (!initialized) {
     return <div>Loading...</div>;
+  }
+
+  if (!keycloak.authenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <button
+          onClick={() => keycloak.login()}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Login
+        </button>
+      </div>
+    );
   }
 
   if (!keycloak.authenticated) {
